@@ -15,111 +15,127 @@ client = discord.Client()
 playerDicts = []
 
 
-##FUNCTIONS
-#Backend functions
+####FUNCTIONS
+##Backend functions
+
+#file + data processing
 async def resetFileData(message):
     members = message.guild.members
     channel = message.channel
     await channel.send('Resetting Data')
-    f = open("players.txt", "w+")
     for i in range(len(members)):
-        tempPersonDict = '{"discriminator": "'+str(members[i].discriminator)+'", "points": "0", "shuffles": "0", nameChanges: "0"}'
-        f.write(tempPersonDict+"\n")
-    f.close()
+        f = open(str(members[i].discriminator)+'.json', 'w+')
+        person_dict = {"discriminator": members[i].discriminator, "username": members[i].name, "points": "0", "shuffles": "0"}
+        json.dump(person_dict, f)
+        f.close()
 
 async def takeDataFromJsonFile(message):
-    #Setting up the json file data
     global playerDicts
-    dataArray = ""
-    f = open("players.txt","r+")
-    data = f.read()
-    dataArray = data.split("\n")
-    f.close()
-    for i in range(len(dataArray)):
-        tempDict = json.loads(dataArray[i])
-        playerDicts.append(tempDict)
-    print(playerDicts)
-
-async def showPoints(message, channel):
-    global playerIds
-    global playerPoints
-    global playerInventory
     members = message.guild.members
-    messageauthor = message.author
+    #Setting up the json file data
     for i in range(len(members)):
+        with open(str(members[i].discriminator)+'.json') as f:
+            playerDicts.append(json.load(f))
+    #print(playerDicts)
+
+async def addDataToJsonFile(message, currentPlayerIndex):
+    global playerDicts
+    members = message.guild.members
+    channel = message.channel
+    currentPlayer = playerDicts[currentPlayerIndex]
+    f = open(str(members[currentPlayerIndex].discriminator)+'.json', 'w+')
+    person_dict = {"discriminator": currentPlayer["discriminator"], "username": currentPlayer["username"], "points": currentPlayer["points"], "shuffles": currentPlayer["shuffles"]}
+    print(person_dict)
+    json.dump(person_dict, f)
+    f.close()
+
+#Command functions
+async def showPoints(message, channel):
+    members = message.guild.members
+    for i in range(len(members)):
+        messageauthor = message.author
         if members[i].id == messageauthor.id:
-            await channel.send(playerPoints[i])
+            currentPlayer = playerDicts[i]
+            currentPlayerPoints = currentPlayer["points"]
+            await channel.send(str(currentPlayer["username"])+"'s Points: "+str(currentPlayerPoints))
 
 async def showInventory(message, channel):
-    global playerIds
-    global playerPoints
-    global playerInventory
     members = message.guild.members
-    messageauthor = message.author
     for i in range(len(members)):
+        messageauthor = message.author
         if members[i].id == messageauthor.id:
-            await channel.send(playerInventory[i])
+            currentPlayer = playerDicts[i]
+            currentPlayerShuffles = currentPlayer["shuffles"]
+            await channel.send(str(currentPlayer["username"])+"'s Inventory: Shuffles -> x"+str(currentPlayerShuffles))
 
-async def showHelp(message, channel):
-    await channel.send("The Dealer Commands: \n$play-XX -> $play- followed by a number of points will allow you to gamble that number of points. If you have less than 10 points you can gamble up to 10.\n$points -> this command will show you how many points you currently have.\n $shop -> This command will show everything that is for sale currently along with it's price.\n $inventory will show how many items you have in your inventory.\n $buy XX -> This command followed by what you want to buy will buy that item from the shop, provided you have the necesary point count.\n $use XX -> This command will use the item that you type from your inventory, provided you have that item.\n $idea XX -?> This command followed by an idea for the bot will be tracked on the suggestion folder for the devs to add features.\n $help -> This command will show this message again.")
+async def showShop(channel):
+    shopMessage = "--The Dealer's Shop-- \n Shuffles -> 100 points each"
+    await channel.send(shopMessage)
 
-async def showShop(message, channel):
-    await channel.send("\n--The Shop--\n VC Shuffle -> 100 points \n Rename an 100% user -> 300 points")
+async def buyItem(message, channel, gambleAmount, currentPlayerIndex):
+    global playerDicts
+    if gambleAmount.lower() == "shuffle":
+        currentPlayer = playerDicts[currentPlayerIndex]
+        currentPlayer["shuffles"] = str(int(currentPlayer["shuffles"]) + 1)
+        currentPlayer["points"] = str(int(currentPlayer["points"]) - 100)
+        await channel.send("Purchase Confirmed!")
+        await addDataToJsonFile(message, currentPlayerIndex)
 
-async def addToInventory(message, channel, item):  
-    #print(playerPoints[playerIndex])
-    for i in range(len(members)):
-            if members[i].id == messageauthor.id:
-                playerInventory[playerIndex] = str( int(playerInventory[playerIndex]) + 1)
-                playerPoints[playerIndex] = str(int(playerPoints[playerIndex]) - 100)
-                #print(playerPoints[playerIndex])
-    await channel.send("Purchase Completed!")
+async def showHelp(channel):
+    helpMessage = "--HELP--\n$help - shows all the commands \n$play xx - flips a coin and gambles the amount of points specified by, xx. If you have <= 10 points you can gamble up to 10 free ones.\n$points - shows your points\n$inventory - shows the items you have\n$shop - shows everything for sale currently\n$buy xx - same thing as $play xx, you buy whatever item you type after the command\n$use xx - you use whatever item you type after the command\n$reset:PASSWORD - who ever is running the server can use this to reset the data for everyone\n$idea XX - users can add ideas to the suggestions file to suggest new features"
+    await channel.send(helpMessage)
 
-async def useShuffle(message, channel, playerIndex):
-    playerInventory[playerIndex] = str(int(playerInventory[playerIndex])-1)
+async def useItem(message, channel, currentPlayerIndex, item):
+    global playerDicts
+    currentPlayer = playerDicts[currentPlayerIndex]
+    if item == "shuffle":
+        currentPlayer["shuffles"] = str(int(currentPlayer["shuffles"]) - 1)
+    await channel.send("Shuffling")
     await shuffle(message, channel)
 
-#Games
-async def flipCoin(message, channel, gambleAmount):
-    members = message.guild.members
-    messageauthor = message.author
-    win = round(random.randint(0, 1))
+
+##Game functions
+async def flipCoin(message, channel, gambleAmount, currentPlayerIndex):
+    global playerDicts
+    win = round(random.randint(0,1))
     if win == 0:
         await channel.send("You Win!")
-        for i in range(len(members)):
-            if members[i].id == messageauthor.id:
-                playerPoints[i] = str(int(playerPoints[i]) + int(gambleAmount))
-        await addDataToFiles(message)
+        currentPlayer = playerDicts[currentPlayerIndex]
+        currentPlayerPoints = currentPlayer["points"]
+        currentPlayer["points"] = str(int(currentPlayerPoints) + int(gambleAmount))
+        await addDataToJsonFile(message, currentPlayerIndex)
     elif win == 1:
         await channel.send("You Lose.")
-        for i in range(len(members)):
-            if members[i].id == messageauthor.id and int(playerPoints[i]) - 5 >= 0:
-                playerPoints[i] = str(int(playerPoints[i]) - int(gambleAmount))
-            else:
-                playerPoints[i] = "0"
+        currentPlayer = playerDicts[currentPlayerIndex]
+        currentPlayerPoints = currentPlayer["points"]
+        currentPlayer["points"] = str(int(currentPlayerPoints) - int(gambleAmount))
+        await addDataToJsonFile(message, currentPlayerIndex)
 
-
-#Shop item functions
+##Shop item functions
 async def shuffle(message, channel):
     members = message.guild.members
-    onlineMembers = []
-    for i in range(len(members)):
-        if members[i].status == "online":
-            onlinerMembers.append(members[i])
     totalChannels = message.guild.channels
     voiceChannels = []
+    onlineMembers = []
     for i in range(len(totalChannels)):
-        if "corner" in totalChannels[i].name.lower():
+        
+        totalChannelsName = totalChannels[i].name
+        if "corner" in totalChannelsName.lower():
             voiceChannels.append(totalChannels[i])
+    for i in range(len(members)):
+        if members[i].status != "offline":
+            onlineMembers.append(members[i])
     for i in range(len(onlineMembers)):
         try:
             randomVC = voiceChannels[round(random.randint(0,(len(voiceChannels) - 1)))]
             await onlineMembers[i].move_to(randomVC, reason="Shuffle Activated")
+            # print(True)
         except discord.HTTPException:
             print("ERR")
         else:
             pass
-            
+
+
 ##CLIENT EVENTS
 @client.event
 async def on_ready():
@@ -129,15 +145,17 @@ async def on_ready():
 
 @client.event
 async def on_message(message):
+    global playerDicts
     ##VARIABLES
     members = message.guild.members
     channel = message.channel
 
     ##INITIALIZING DATA FUNCTIONS
-    #await takeDataFromJsonFile(message)
-
+    await takeDataFromJsonFile(message)
+    #print(playerDicts)
     if message.author != client:
         messageContent = message.content
+        ## Commands with an input
         if "$play" in messageContent:
             gambleAmount = ""
             addingGamble = False
@@ -151,90 +169,68 @@ async def on_message(message):
             for i in range(len(members)):
                 messageauthor = message.author
                 if members[i].id == messageauthor.id:
-                    currentPlayerPoints = int(playerPoints[i])
-                    # print(currentPlayerPoints > int(gambleAmount))
+                    currentPlayer = playerDicts[i]
+                    currentPlayerPoints = int(currentPlayer["points"])
                     if currentPlayerPoints >= int(gambleAmount):
-                        await flipCoin(message, channel, gambleAmount)
-                        await addDataToFiles(message)
-                        await addFilesToData(message)
+                        await flipCoin(message, channel, gambleAmount, i)
                     elif int(gambleAmount) <= 10 and currentPlayerPoints <= 10:
-                        await flipCoin(message, channel, gambleAmount)
-                        await addDataToFiles(message)
-                        await addFilesToData(message)
+                        await flipCoin(message, channel, gambleAmount, i)
                     else:
                         await channel.send("Not Enough Points")
-        if messageContent == "$points":
-            await showPoints(message, channel)
-        if messageContent == "$inventory":
-            await showInventory(message, channel)
-        if messageContent == "$reset:KerrySpice15":
-            #print("True")
-            await resetFileData(message)
-        if messageContent == "$help":
-            await showHelp(message, channel)
-        if messageContent == "$shop":
-            await showShop(message, channel)
         if "$buy" in messageContent:
-            itemToBuy = ""
-            addingItemText = False
+            #gambleAmount in this function takes the item to buy instead of the gamble amount from $play
+            gambleAmount = ""
+            addingGamble = False
             for i in range(len(messageContent)):
-                itemToBuy
-                addingItemText
-                if addingItemText == True:
-                    itemToBuy += messageContent[i]
+                gambleAmount
+                addingGamble
+                if addingGamble == True:
+                    gambleAmount += messageContent[i]
                 if messageContent[i] == " ":
-                    addingItemText = True
-            print(itemToBuy)
+                    addingGamble = True
             for i in range(len(members)):
                 messageauthor = message.author
                 if members[i].id == messageauthor.id:
-                    if itemToBuy == "shuffle":
-                        print(playerIds[i])
-                        currentPlayerPoints = int(playerPoints[i])
-                        print(members[i].name)
+                    currentPlayer = playerDicts[i]
+                    currentPlayerPoints = int(currentPlayer["points"])
+                    if gambleAmount.lower() == "shuffle":
                         if currentPlayerPoints >= 100:
-                            await addToInventory(message, channel, "shuffle")
-                            await addDataToFiles(message)
-                            await addFilesToData(message)
+                            await buyItem(message, channel, gambleAmount, i)
                         else:
                             await channel.send("Not Enough Points")
         if "$use" in messageContent:
-            itemToUse = ""
-            addingItemText = False
+            #gambleAmount in this function takes the item to use instead of the gamble amount from $play
+            gambleAmount = ""
+            addingGamble = False
             for i in range(len(messageContent)):
-                itemToUse
-                addingItemText
-                if addingItemText == True:
-                    itemToUse += messageContent[i]
+                gambleAmount
+                addingGamble
+                if addingGamble == True:
+                    gambleAmount += messageContent[i]
                 if messageContent[i] == " ":
-                    addingItemText = True
-            print(itemToUse)
+                    addingGamble = True
             for i in range(len(members)):
                 messageauthor = message.author
                 if members[i].id == messageauthor.id:
-                    if itemToUse == "shuffle":
-                        print(playerIds[i])
-                        currentPlayerShuffles = int(playerInventory[i])
-                        print(members[i].name)
-                        if currentPlayerShuffles >= 1:
-                            await useShuffle(message, channel, i)
-                            await addDataToFiles(message)
-                            await addFilesToData(message)
+                    currentPlayer = playerDicts[i]
+                    currentPlayerShuffles = int(currentPlayer["shuffles"])
+                    if gambleAmount.lower() == "shuffle":
+                        if currentPlayerShuffles > 0:
+                            await useItem(message, channel, i, "shuffle")
                         else:
-                            await channel.send("No Shuffles Available.")
-        if "$idea" in messageContent:
-            idea = ""
-            addingItemText = False
-            for i in range(len(messageContent)):
-                idea
-                addingItemText
-                if addingItemText == True:
-                    idea += messageContent[i]
-                if messageContent[i] == " ":
-                    addingItemText = True
-            print(idea)
-            f = open("suggestions.txt", "a+")
-            f.write(idea+"\n")
-            f.close()
-            await channel.send("Suggestion Noted!")
+                            await channel.send("Not enough shuffles")
+        #function call commands
+        if messageContent == "$points":
+            await showPoints(message, channel)
+        if messageContent == "$inventory" or messageContent == "$inv":
+            await showInventory(message, channel)
+        if messageContent == "$shop":
+            await showShop(channel)
+        if messageContent == "$help":
+            await showHelp(channel)
+        
+        if messageContent == "$reset:uiop19hjkl":
+            #print("True")
+            await resetFileData(message)
+
 client.run(token)
