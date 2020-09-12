@@ -153,9 +153,47 @@ async def on_message(message):
     ##INITIALIZING DATA FUNCTIONS
     await takeDataFromJsonFile(message)
     #print(playerDicts)
+    #muting the players for games
     if message.author != client:
         messageContent = message.content
         ## Commands with an input
+                    if "$mute" in messageContent.lower():
+            if str(message.author.discriminator) == "5252" or str(message.author.discriminator) == "3321" or str(message.author.discriminator) == "4629":
+                for i in range(len(vcIds)):
+                    print(vcIds[i])
+                    currentChannel = client.get_channel(vcIds[i])
+                    if message.author in currentChannel.members:
+                        print("Found the VC")
+                        for i in range(len(members)):
+                            if members[i].name == message.author.name:
+                                pass
+                            else:
+                                try:
+                                    await members[i].edit(mute=True)
+                                except discord.errors.HTTPException:
+                                    pass
+                                else:
+                                    pass
+
+        if "$unmute" in messageContent.lower():
+            if str(message.author.discriminator) == "5252" or str(message.author.discriminator) == "3321" or str(
+                    message.author.discriminator) == "4629":
+                for i in range(len(vcIds)):
+                    print(vcIds[i])
+                    currentChannel = client.get_channel(vcIds[i])
+                    if message.author in currentChannel.members:
+                        print("Found the VC")
+                        for i in range(len(members)):
+                            if members[i].name == message.author.name:
+                                pass
+                            else:
+                                try:
+                                    await members[i].edit(mute=False)
+                                except discord.errors.HTTPException:
+                                    pass
+                                else:
+                                    pass
+        
         if "$play" in messageContent:
             gambleAmount = ""
             addingGamble = False
